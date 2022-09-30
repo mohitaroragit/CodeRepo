@@ -1,0 +1,11 @@
+import requests
+response=requests.get('https://api.github.com')
+print(response.status_code)
+print(response.content)
+print(response.text)
+print(response.json())
+print(response.headers)
+print(response.headers['content-type'])
+r=requests.get('https://api.github.com/repos/psf/requests')
+print(r.json()["description"])
+print(response)
