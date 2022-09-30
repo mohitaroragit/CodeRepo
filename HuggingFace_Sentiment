@@ -1,0 +1,29 @@
+from transformers import pipeline,AutoTokenizer,AutoModelForSequenceClassification
+import torch
+import torch.nn.functional as F
+model_name="distilbert-base-uncased-finetuned-sst-2-english"
+model=AutoModelForSequenceClassification.from_pretrained(model_name)
+tokenizer=AutoTokenizer.from_pretrained(model_name)
+classifier=pipeline("sentiment-analysis",model=model_name,tokenizer=tokenizer)
+res=classifier(["We are happy to show you the smiling face Transformer Library",
+               "We hope you don't hate it"])
+for res in res:
+    print(res)
+tokens=tokenizer.tokenize("We are happy to show you the smiling face Transformer Library")
+token_ids=tokenizer.convert_tokens_to_ids(tokens)
+input_ids=tokenizer("We are happy to show you the smiling face Transformer Library")
+print(f' Tokens: {tokens}')
+print(f'Token Ids : {token_ids}')
+print(f'Input IDs : {input_ids}')
+X_train=["We are happy to show you the smiling face Transformer Library",
+               "We hope you don't hate it"]
+batch=tokenizer(X_train,padding=True,truncation=True,max_length=512,return_tensors="pt")
+with torch.no_grad():
+    outputs=model(**batch,labels=torch.tensor([1,0]))
+    print(outputs)
+    predictions=F.softmax(outputs.logits,dim=1)
+    print(predictions)
+    labels=torch.argmax(predictions,dim=1)
+    print(labels)
+    labels=(model.config.id2label[label_id] for label_id in labels.tolist())
+    print(labels)
