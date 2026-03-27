@@ -1,0 +1,80 @@
+import asyncio
+import time
+import nest_asyncio
+import vertexai
+nest_asyncio.apply()
+from google.cloud import storage
+from tenacity import retry,wait_random_exponential
+from vertexai.generative_models import GenerativeModel,GenerationConfig,Part
+Project_Id='project-1cdb8552-bf83-4a34-8ba'
+DEFAULT_MODEL_NAME='gemini-2.5-pro'
+REGION='us-central1'
+vertexai.init(project=Project_Id,location=REGION)
+config=GenerationConfig(temperature=0.5,max_output_tokens=512)
+def get_images_url_from_bucket(bucket_name,delimiter=None):
+    storage_client = storage.Client(project=Project_Id)
+    blobs=storage_client.list_blobs(bucket_name,delimiter=delimiter)
+    images=[
+        f"gs://{bucket_name}/{blob.name}"
+        for blob in blobs
+        if blob.name.endswith(tuple([".jpg",".png",".jpeg"]))
+
+    ]
+    return images
+async def async_ask_gemini(contents,model_name=DEFAULT_MODEL_NAME):
+    multimodal_model=GenerativeModel(model_name)
+    response=await multimodal_model.generate_content_async(
+        contents=contents,
+        generation_config=config
+    )
+    return response.text
+@retry(wait=wait_random_exponential(multiplier=1,  max=60))
+async def retry_async_ask_gemini(contents,model_name=DEFAULT_MODEL_NAME):
+    multimodal_model=GenerativeModel(model_name)
+    response=await multimodal_model.generate_content_async(
+        contents=contents,generation_config=config
+    )
+
+    return response.text
+async def load_test_gemini(function,model_name,attempts=5):
+    failed_attempts=0
+    print(f"Testing with model :{model_name} and function :{function.__name__}")
+    for i in range(attempts):
+        try:
+            time_start = time.time()
+            get_gemini_responses=[
+                function(
+                    [
+                        prompt,
+
+                        Part.from_uri(image_uri,mime_type="image/jpeg"),
+                    ],
+                    model_name=MODEL_NAME,
+                )
+                for image_uri in images_list
+            ]
+            async_poems=await asyncio.gather(*get_gemini_responses)
+            time_taken=time.time()-time_start
+            print(f" {len(async_poems)} Poems written in {time_taken:.0f} seconds")
+        except Exception as error:
+            failed_attempts += 1
+            print(f"An error occured:" ,error)
+    print(
+        f"{failed_attempts} out of  {attempts} failed "
+
+    )if failed_attempts > 0 else print(f"All {attempts} attempts succeeded")
+bucket_name="vertex_run_bucket"
+# image_prefix="generative-ai/image/"
+images_list=get_images_url_from_bucket(bucket_name,delimiter="/")
+prompt=("Get the elements from the image ,get all the animals from the video, print all the animals and elemnts found on a numbered list, and then write a poem about them \n")
+small_video_uri="gs://cloud-samples-data/generative-ai/video/animals.mp4"
+large_video_uri = (
+    "gs://cloud-samples-data/generative-ai/video/behind_the_scenes_pixel.mp4"
+)
+video_part=Part.from_uri(small_video_uri,mime_type="video/mp4")
+MODEL_NAME="gemini-2.5-pro"
+
+if __name__=="__main__":
+    asyncio.run(
+        load_test_gemini(
+        async_ask_gemini,MODEL_NAME,attempts=3))
